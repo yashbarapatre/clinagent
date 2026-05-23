@@ -359,7 +359,7 @@
     </section>
 
     <!-- JS Scripts -->
-    <script src="app.js"></script>
+    <script src="app.js" defer></script>
 
     <!-- ══════════════════════════════════════════════════
          ADD NEW PATIENT MODAL
@@ -404,108 +404,18 @@
                     </div>
                 </div>
 
-                <!-- Medical History -->
+                <!-- Contact (personal info only) -->
                 <div class="modal-section">
-                    <h4 class="modal-section-title"><i class="fa-solid fa-notes-medical"></i> Medical History</h4>
-                    <div class="form-group">
-                        <label for="np-history">Active Conditions (one per line)</label>
-                        <textarea id="np-history" rows="3" placeholder="e.g. Hypertension&#10;Type 2 Diabetes&#10;Chronic Kidney Disease Stage 3"></textarea>
-                    </div>
-                </div>
-
-                <!-- Safety-critical fields (Feature 1) -->
-                <div class="modal-section">
-                    <h4 class="modal-section-title"><i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i> Safety-Critical Fields</h4>
+                    <h4 class="modal-section-title"><i class="fa-solid fa-address-book"></i> Contact</h4>
                     <div class="modal-grid-2">
                         <div class="form-group">
-                            <label for="np-allergies">Allergies (comma-separated) <span class="required">*</span></label>
-                            <input type="text" id="np-allergies" placeholder="e.g. Penicillin, Sulfa, NKDA">
+                            <label for="np-phone">Phone</label>
+                            <input type="tel" id="np-phone" placeholder="e.g. (555) 123-4567">
                         </div>
                         <div class="form-group">
-                            <label for="np-weight">Weight (kg or lbs) <span class="required">*</span></label>
-                            <input type="text" id="np-weight" placeholder="e.g. 72 kg">
+                            <label for="np-email">Email</label>
+                            <input type="email" id="np-email" placeholder="e.g. jane@example.com">
                         </div>
-                        <div class="form-group">
-                            <label for="np-code-status">Code Status</label>
-                            <select id="np-code-status" class="premium-select">
-                                <option value="">Not documented</option>
-                                <option>Full Code</option>
-                                <option>DNR</option>
-                                <option>DNI</option>
-                                <option>DNR/DNI</option>
-                                <option>Comfort Care</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="np-pregnancy">Pregnancy Status</label>
-                            <select id="np-pregnancy" class="premium-select">
-                                <option value="">Not documented</option>
-                                <option>Not pregnant</option>
-                                <option>Pregnant</option>
-                                <option>Postpartum</option>
-                                <option>Not applicable</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="np-lmp">Last Menstrual Period</label>
-                            <input type="date" id="np-lmp">
-                        </div>
-                        <div class="form-group">
-                            <label for="np-directives">Advance Directives</label>
-                            <input type="text" id="np-directives" placeholder="e.g. Living will on file">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Current Medications -->
-                <div class="modal-section">
-                    <h4 class="modal-section-title"><i class="fa-solid fa-pills"></i> Current Medications</h4>
-                    <div id="np-meds-list" class="np-meds-list"></div>
-                    <button type="button" id="add-med-btn" class="add-row-btn">
-                        <i class="fa-solid fa-plus"></i> Add Medication
-                    </button>
-                </div>
-
-                <!-- Vitals -->
-                <div class="modal-section">
-                    <h4 class="modal-section-title"><i class="fa-solid fa-stethoscope"></i> Vitals</h4>
-                    <div class="modal-grid-3">
-                        <div class="form-group">
-                            <label>Temperature</label>
-                            <input type="text" id="vit-temp" placeholder="e.g. 98.6 F">
-                        </div>
-                        <div class="form-group">
-                            <label>Heart Rate</label>
-                            <input type="text" id="vit-hr" placeholder="e.g. 72 bpm">
-                        </div>
-                        <div class="form-group">
-                            <label>Respiratory Rate</label>
-                            <input type="text" id="vit-rr" placeholder="e.g. 16 breaths/min">
-                        </div>
-                        <div class="form-group">
-                            <label>Blood Pressure</label>
-                            <input type="text" id="vit-bp" placeholder="e.g. 120/80 mmHg">
-                        </div>
-                        <div class="form-group">
-                            <label>O2 Saturation</label>
-                            <input type="text" id="vit-o2" placeholder="e.g. 98% on room air">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Labs -->
-                <div class="modal-section">
-                    <h4 class="modal-section-title"><i class="fa-solid fa-vial"></i> Laboratory Results</h4>
-                    <div class="modal-grid-3">
-                        <div class="form-group"><label>Creatinine</label><input type="text" id="lab-creat" placeholder="e.g. 1.1 mg/dL"></div>
-                        <div class="form-group"><label>eGFR</label><input type="text" id="lab-egfr" placeholder="e.g. 75 mL/min"></div>
-                        <div class="form-group"><label>BNP</label><input type="text" id="lab-bnp" placeholder="e.g. 150 pg/mL"></div>
-                        <div class="form-group"><label>Sodium</label><input type="text" id="lab-na" placeholder="e.g. 138 mEq/L"></div>
-                        <div class="form-group"><label>Potassium</label><input type="text" id="lab-k" placeholder="e.g. 4.0 mEq/L"></div>
-                        <div class="form-group"><label>BUN</label><input type="text" id="lab-bun" placeholder="e.g. 18 mg/dL"></div>
-                        <div class="form-group"><label>Glucose</label><input type="text" id="lab-gluc" placeholder="e.g. 110 mg/dL"></div>
-                        <div class="form-group"><label>HbA1c</label><input type="text" id="lab-hba1c" placeholder="e.g. 7.2%"></div>
-                        <div class="form-group"><label>WBC</label><input type="text" id="lab-wbc" placeholder="e.g. 8.5 k/uL"></div>
                     </div>
                 </div>
             </div>

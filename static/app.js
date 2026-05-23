@@ -115,8 +115,6 @@ const addPatientModal = document.getElementById("add-patient-modal");
 const modalCloseBtn   = document.getElementById("modal-close-btn");
 const modalCancelBtn  = document.getElementById("modal-cancel-btn");
 const modalSaveBtn    = document.getElementById("modal-save-btn");
-const addMedBtn       = document.getElementById("add-med-btn");
-const npMedsList      = document.getElementById("np-meds-list");
 const npErrorMsg      = document.getElementById("np-error-msg");
 
 // ─────────────────────────────────────────────────────────────────
@@ -134,7 +132,11 @@ document.addEventListener("DOMContentLoaded", () => {
 // ─────────────────────────────────────────────────────────────────
 function setupEventListeners() {
     patientSelect.addEventListener("change", e => {
-        if (e.target.value) fetchPatientDetails(e.target.value);
+        const id = e.target.value;
+        if (!id) return;
+        // Locally-added (not-yet-persisted) patients live in memory, not the API.
+        if (localPatients[id]) displayPatient(localPatients[id]);
+        else fetchPatientDetails(id);
     });
 
     recordBtn.addEventListener("click", toggleRecording);
@@ -201,7 +203,6 @@ function setupEventListeners() {
     addPatientModal.addEventListener("click", e => {
         if (e.target === addPatientModal) closeAddPatientModal();
     });
-    addMedBtn.addEventListener("click", addMedicationRow);
     modalSaveBtn.addEventListener("click", saveNewPatient);
 }
 
@@ -761,45 +762,48 @@ async function submitApproval() {
 // ─────────────────────────────────────────────────────────────────
 // Add New Patient Modal
 // ─────────────────────────────────────────────────────────────────
+// Personal-info fields collected by the modal (no medical data), with sample
+// values pre-populated on open so the clinician can edit rather than start blank.
+const NEW_PATIENT_DEFAULTS = {
+    "np-name":   "Jane Smith",
+    "np-dob":    "1985-06-15",
+    "np-age":    "40",
+    "np-gender": "Female",
+    "np-phone":  "(555) 123-4567",
+    "np-email":  "jane.smith@example.com",
+};
+
+// In-memory store of patients added via the modal but not yet persisted to the
+// backend. Keyed by the patient's local id so re-selecting them in the dropdown
+// renders from memory instead of hitting the (nonexistent) API record.
+const localPatients = {};
+
 function openAddPatientModal() {
     addPatientModal.classList.remove("hidden");
-    npMedsList.innerHTML = "";
     npErrorMsg.classList.add("hidden");
-    // Clear all fields
-    ["np-name","np-dob","np-age","np-history","np-allergies","np-weight","np-directives","np-lmp",
-     "vit-temp","vit-hr","vit-rr","vit-bp","vit-o2",
-     "lab-creat","lab-egfr","lab-bnp","lab-na","lab-k","lab-bun","lab-gluc","lab-hba1c","lab-wbc"
-    ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
-    document.getElementById("np-gender").value = "";
-    document.getElementById("np-code-status").value = "";
-    document.getElementById("np-pregnancy").value = "";
+    // Pre-populate with sample personal info; clinician edits before saving.
+    Object.entries(NEW_PATIENT_DEFAULTS).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    });
 }
 
 function closeAddPatientModal() {
     addPatientModal.classList.add("hidden");
 }
 
-function addMedicationRow() {
-    const row = document.createElement("div");
-    row.className = "med-row";
-    row.innerHTML = `
-        <input type="text" placeholder="Medication name" class="med-name">
-        <input type="text" placeholder="Dosage" class="med-dose">
-        <input type="text" placeholder="Frequency" class="med-freq">
-        <button class="remove-med-btn" title="Remove"><i class="fa-solid fa-xmark"></i></button>
-    `;
-    row.querySelector(".remove-med-btn").addEventListener("click", () => row.remove());
-    npMedsList.appendChild(row);
-    row.querySelector(".med-name").focus();
-}
-
-async function saveNewPatient() {
+// Builds a patient object from the modal's personal-info fields and renders it
+// on screen. This is intentionally a client-side placeholder: nothing is
+// persisted yet — see the TODO below for where the real save would happen.
+function saveNewPatient() {
     npErrorMsg.classList.add("hidden");
 
     const name   = document.getElementById("np-name").value.trim();
     const dob    = document.getElementById("np-dob").value;
-    const age    = parseInt(document.getElementById("np-age").value);
+    const age    = parseInt(document.getElementById("np-age").value, 10);
     const gender = document.getElementById("np-gender").value;
+    const phone  = document.getElementById("np-phone").value.trim();
+    const email  = document.getElementById("np-email").value.trim();
 
     if (!name || !dob || !age || !gender) {
         npErrorMsg.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Name, Date of Birth, Age, and Gender are required.`;
@@ -807,80 +811,52 @@ async function saveNewPatient() {
         return;
     }
 
-    // Collect medications
-    const meds = [];
-    npMedsList.querySelectorAll(".med-row").forEach(row => {
-        const name = row.querySelector(".med-name").value.trim();
-        const dose = row.querySelector(".med-dose").value.trim();
-        const freq = row.querySelector(".med-freq").value.trim();
-        if (name) meds.push({ name, dosage: dose || "—", frequency: freq || "—" });
-    });
-
-    // Allergies
-    const allergyRaw = document.getElementById("np-allergies").value.trim();
-    const allergies = allergyRaw ? allergyRaw.split(",").map(a => a.trim()).filter(Boolean) : [];
-
-    // Vitals
-    const vitals = {};
-    if (document.getElementById("vit-temp").value) vitals.temperature = document.getElementById("vit-temp").value;
-    if (document.getElementById("vit-hr").value)   vitals.heart_rate  = document.getElementById("vit-hr").value;
-    if (document.getElementById("vit-rr").value)   vitals.respiratory_rate = document.getElementById("vit-rr").value;
-    if (document.getElementById("vit-bp").value)   vitals.blood_pressure   = document.getElementById("vit-bp").value;
-    if (document.getElementById("vit-o2").value)   vitals.oxygen_saturation = document.getElementById("vit-o2").value;
-
-    // Labs
-    const labs = {};
-    const labMap = { "lab-creat": "Creatinine", "lab-egfr": "eGFR", "lab-bnp": "BNP",
-                     "lab-na": "Sodium", "lab-k": "Potassium", "lab-bun": "BUN",
-                     "lab-gluc": "Glucose", "lab-hba1c": "HbA1c", "lab-wbc": "WBC" };
-    for (const [id, label] of Object.entries(labMap)) {
-        const val = document.getElementById(id).value.trim();
-        if (val) labs[label] = val;
-    }
-
-    // History
-    const historyRaw = document.getElementById("np-history").value.trim();
-    const history = historyRaw ? historyRaw.split("\n").map(h => h.trim()).filter(Boolean) : [];
-
-    const payload = {
-        name, age, gender,
+    // Personal info only — medical data is captured later in the pipeline.
+    const patient = {
+        id: `local-${Date.now()}`,
+        name,
+        age,
+        gender,
         date_of_birth: dob,
-        history,
-        current_medications: meds,
-        vitals, labs, allergies,
-        weight:             document.getElementById("np-weight").value.trim(),
-        code_status:        document.getElementById("np-code-status").value,
-        pregnancy_status:   document.getElementById("np-pregnancy").value,
-        last_menstrual_period: document.getElementById("np-lmp").value,
-        advance_directives: document.getElementById("np-directives").value.trim(),
+        phone,
+        email,
     };
 
-    modalSaveBtn.disabled = true;
-    modalSaveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+    // TODO: persist `patient` to the backend (POST ${API_BASE}/api/patients)
+    //       once the save endpoint is ready. For now we only render it.
+    renderNewPatient(patient);
+    closeAddPatientModal();
+}
 
-    try {
-        const res = await fetch(`${API_BASE}/api/patients`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.status === "created") {
-            closeAddPatientModal();
-            await fetchPatients();
-            // Auto-select the new patient
-            patientSelect.value = data.id;
-            patientSelect.dispatchEvent(new Event("change"));
-        } else {
-            throw new Error("Server returned unexpected response");
-        }
-    } catch (err) {
-        npErrorMsg.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Failed to save patient: ${err.message}`;
-        npErrorMsg.classList.remove("hidden");
-    } finally {
-        modalSaveBtn.disabled = false;
-        modalSaveBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Patient`;
-    }
+// Adds a (not-yet-persisted) patient to the in-memory store and dropdown, then
+// selects and displays it as the active patient.
+function renderNewPatient(patient) {
+    localPatients[patient.id] = patient;
+
+    const opt = document.createElement("option");
+    opt.value = patient.id;
+    opt.textContent = `${patient.name} (${patient.gender}, Age ${patient.age})`;
+    patientSelect.appendChild(opt);
+    patientSelect.value = patient.id;
+
+    displayPatient(patient);
+}
+
+// Fills the EHR card with a patient's personal info. Medical sections are
+// cleared since a locally-added patient has no medical data yet.
+function displayPatient(patient) {
+    activePatient = patient;
+    document.getElementById("ehr-name").textContent   = patient.name;
+    document.getElementById("ehr-age").textContent    = patient.age;
+    document.getElementById("ehr-gender").textContent = patient.gender;
+    document.getElementById("ehr-dob").textContent    = patient.date_of_birth;
+
+    ["ehr-history", "ehr-meds", "ehr-vitals", "ehr-labs"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = "";
+    });
+
+    patientEhrCard.classList.remove("hidden");
 }
 
 // ─────────────────────────────────────────────────────────────────
