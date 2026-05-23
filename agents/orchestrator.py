@@ -1,10 +1,12 @@
 import asyncio
 import uuid
 import datetime
+import json
 from .rag_agent import RagAgent
 from .doc_agent import DocumentationAgent
 from .verification_agent import VerificationAgent
 from .audit_agent import AuditAgent
+from .safety_agent import SafetyAgent
 
 # Global in-memory state dictionary for tracking active sessions
 sessions_state = {}
@@ -16,8 +18,9 @@ class ClinAgentOrchestrator:
         self.doc_agent = DocumentationAgent(api_key)
         self.verify_agent = VerificationAgent(api_key)
         self.audit_agent = AuditAgent()
+        self.safety_agent = SafetyAgent(api_key)
 
-    async def run_workflow(self, session_id: str, patient_data: dict, dictation: str, image_notes: str):
+    async def run_workflow(self, session_id: str, patient_data: dict, dictation: str, image_notes: str, missing_data_check: dict = None):
         """Runs the entire multi-agent clinical documentation pipeline."""
         sessions_state[session_id] = {
             "status": "Starting",
@@ -26,7 +29,9 @@ class ClinAgentOrchestrator:
             "patient_name": patient_data.get("name"),
             "patient_id": patient_data.get("id"),
             "outputs": None,
-            "verification": None
+            "verification": None,
+            "safety": missing_data_check or {},
+            "allergy_check": None,
         }
 
         def update_status(status: str, progress: int, step_desc: str):
@@ -54,17 +59,19 @@ class ClinAgentOrchestrator:
                 "image_notes": image_notes
             })
 
+            # Log the pre-run missing data check result (already computed before background task)
+            if missing_data_check:
+                self.audit_agent.log_event(session_id, "missing_data_check", {
+                    "checked_at": missing_data_check.get("checked_at"),
+                    "result": missing_data_check.get("result"),
+                    "critical_fields_missing": [f["label"] for f in missing_data_check.get("critical", [])],
+                    "warning_fields_missing": [f["label"] for f in missing_data_check.get("warnings", [])],
+                })
+
             # 2. Parallel RAG Retrieval & Reasoning
             update_status("Retrieving Guidelines", 30, "Querying CDC, NIH, and WHO clinical databases in parallel...")
             
-            # Formulate query based on patient diagnosis and history
-            search_query = patient_data.get("history", ["General"])[0]
-            # Parallel tasks:
-            # Retrieve guidelines using RAG Agent
-            # Simultaneously, we simulate reasoning preparations.
             guidelines_task = self.rag_agent.get_guidelines_for_patient(patient_data.get("history", []))
-            
-            # Await the parallel execution
             guidelines_text = await guidelines_task
             
             update_status("Analyzing Guidelines", 50, "Synthesizing retrieved clinical evidence against patient status.")
@@ -96,7 +103,70 @@ class ClinAgentOrchestrator:
             
             self.audit_agent.log_event(session_id, "verification_completed", verification_report)
 
-            # 5. Pipeline Finished, waiting for clinician review
+            # 5. Allergy Safety Check (runs after docs are generated, before clinician review)
+            update_status("Running Allergy Safety Check", 92, "Pharmacist AI checking all treatment plan medications against patient allergies...")
+
+            # Build allergy string from patient record
+            allergies_raw = patient_data.get("allergies", None)
+            if not allergies_raw:
+                patient_allergies_str = "Not documented"
+            elif isinstance(allergies_raw, list):
+                patient_allergies_str = ", ".join(
+                    (a.get("substance") or a.get("name") or str(a)) if isinstance(a, dict) else str(a)
+                    for a in allergies_raw
+                )
+            else:
+                patient_allergies_str = str(allergies_raw)
+
+            # Extract medications from generated plan
+            meds_in_plan = []
+            try:
+                # From discharge medications
+                if isinstance(doc_data, dict):
+                    ds = doc_data.get("discharge_summary", {})
+                    if isinstance(ds, dict):
+                        dc_meds = ds.get("discharge_medications", [])
+                        meds_in_plan.extend(dc_meds if isinstance(dc_meds, list) else [str(dc_meds)])
+                    # Also pull from prior auth medication
+                    pa = doc_data.get("prior_auth", {})
+                    if isinstance(pa, dict) and pa.get("medication_name"):
+                        meds_in_plan.append(pa["medication_name"])
+            except Exception:
+                pass
+
+            # Also include current medications from EHR
+            current_meds = patient_data.get("current_medications", [])
+            if isinstance(current_meds, list):
+                for m in current_meds:
+                    if isinstance(m, dict):
+                        meds_in_plan.append(m.get("name", ""))
+                    else:
+                        meds_in_plan.append(str(m))
+
+            medications_str = ", ".join(filter(None, meds_in_plan)) or "Not specified"
+
+            self.audit_agent.log_event(session_id, "allergy_check_started", {
+                "checked_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "patient_allergies": patient_allergies_str,
+                "medications_to_check": medications_str,
+            })
+
+            allergy_result = await self.safety_agent.run_allergy_check(
+                patient_allergies=patient_allergies_str,
+                medications_in_plan=medications_str,
+                patient_id=str(patient_data.get("id", "unknown")),
+            )
+
+            sessions_state[session_id]["allergy_check"] = allergy_result
+            self.audit_agent.log_event(session_id, "allergy_check_completed", {
+                "checked_at": allergy_result.get("checked_at"),
+                "result_status": allergy_result.get("result_status"),
+                "has_critical": allergy_result.get("has_critical"),
+                "has_warning": allergy_result.get("has_warning"),
+                "summary": allergy_result.get("raw_response", "")[:500],
+            })
+
+            # 6. Pipeline Finished, waiting for clinician review
             sessions_state[session_id]["outputs"] = doc_data
             sessions_state[session_id]["verification"] = verification_report
             update_status("Pending Review", 100, "Multi-agent processing completed. Documentation ready for clinician review.")

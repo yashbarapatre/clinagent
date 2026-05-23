@@ -45,10 +45,15 @@
                 
                 <div class="patient-selector-wrapper">
                     <label for="patient-select">Select Patient EHR</label>
-                    <select id="patient-select" class="premium-select">
-                        <option value="" disabled selected>Select a patient...</option>
-                        <!-- Dynamic options loaded via API -->
-                    </select>
+                    <div class="patient-select-row">
+                        <select id="patient-select" class="premium-select">
+                            <option value="" disabled selected>Select a patient...</option>
+                            <!-- Dynamic options loaded via API -->
+                        </select>
+                        <button id="add-patient-btn" class="add-patient-btn" title="Add New Patient">
+                            <i class="fa-solid fa-user-plus"></i> New Patient
+                        </button>
+                    </div>
                 </div>
 
                 <!-- EHR Info Card (Populates Dynamically) -->
@@ -83,12 +88,15 @@
                 <div class="intake-controls">
                     <h3><i class="fa-solid fa-microphone"></i> Bedsides Clinician Dictation</h3>
                     <div class="voice-notes-wrapper">
-                        <textarea id="dictation-input" placeholder="Type or simulate clinician bedside voice notes here... (e.g. Patient presents with increasing shortness of breath, bilateral lower extremity edema, metoprolol success target checks...)"></textarea>
+                        <textarea id="dictation-input" placeholder="Your recorded voice notes will appear here... (or type manually)"></textarea>
                         <div class="voice-actions">
-                            <button id="record-btn" class="secondary-btn"><i class="fa-solid fa-microphone-lines"></i> Simulate Audio Intake</button>
+                            <button id="record-btn" class="secondary-btn" id="record-btn">
+                                <i class="fa-solid fa-microphone"></i> Start Recording
+                            </button>
                             <div id="audio-waveform" class="waveform hidden">
                                 <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                             </div>
+                            <span id="record-status" style="font-size:0.75rem; color: var(--text-muted); display:none;">Listening...</span>
                         </div>
                     </div>
                 </div>
@@ -104,6 +112,15 @@
                         </label>
                         <textarea id="image-notes" placeholder="Optionally, type image notes or OCR/ECG description here... (e.g. Chest X-Ray shows moderate bilateral pleural effusions, cardiomegaly...)"></textarea>
                     </div>
+                </div>
+
+                <!-- Safety Check Panel (appears after patient loaded) -->
+                <div id="safety-check-panel" class="hidden">
+                    <div id="safety-critical-container"></div>
+                    <div id="safety-warning-container"></div>
+                    <button id="acknowledge-btn" class="acknowledge-btn hidden">
+                        <i class="fa-solid fa-triangle-exclamation"></i> I Acknowledge Missing Data — Proceed with Caution
+                    </button>
                 </div>
 
                 <!-- Run Button -->
@@ -196,6 +213,33 @@
                         <div id="safety-recommendations-wrapper" class="report-section hidden">
                             <h5>Recommendations</h5>
                             <p id="safety-recommendations"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allergy Safety Check Section -->
+                <div id="allergy-check-section" class="allergy-check-section hidden">
+                    <div class="allergy-check-header">
+                        <i class="fa-solid fa-flask-vial" id="allergy-icon"></i>
+                        <h4 id="allergy-title">Pharmacist AI: Running Allergy Safety Check...</h4>
+                    </div>
+                    <div id="allergy-check-spinner" class="allergy-spinner">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Cross-referencing all medications against patient allergies...</span>
+                    </div>
+                    <div id="allergy-check-result" class="hidden">
+                        <div id="allergy-result-body"></div>
+                        <!-- Override box for critical conflicts -->
+                        <div id="allergy-override-box" class="override-reason-box hidden">
+                            <label for="allergy-override-reason">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                                Clinician Override Required — Document your clinical reason to proceed:
+                            </label>
+                            <textarea id="allergy-override-reason" rows="3"
+                                placeholder="Required: State your clinical justification for proceeding despite the critical allergy conflict..."></textarea>
+                            <button id="override-unlock-btn" class="override-unlock-btn">
+                                <i class="fa-solid fa-unlock"></i> Submit Override & Unlock Approve
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -316,5 +360,166 @@
 
     <!-- JS Scripts -->
     <script src="app.js"></script>
+
+    <!-- ══════════════════════════════════════════════════
+         ADD NEW PATIENT MODAL
+    ══════════════════════════════════════════════════ -->
+    <div id="add-patient-modal" class="modal-overlay hidden">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                    <i class="fa-solid fa-user-plus" style="color:#6366f1; font-size:1.2rem;"></i>
+                    <h3>Add New Patient</h3>
+                </div>
+                <button id="modal-close-btn" class="modal-close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Demographics -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-id-card"></i> Demographics</h4>
+                    <div class="modal-grid-2">
+                        <div class="form-group">
+                            <label for="np-name">Full Name <span class="required">*</span></label>
+                            <input type="text" id="np-name" placeholder="e.g. Jane Smith">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-dob">Date of Birth <span class="required">*</span></label>
+                            <input type="date" id="np-dob">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-age">Age <span class="required">*</span></label>
+                            <input type="number" id="np-age" min="0" max="150" placeholder="e.g. 65">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-gender">Gender <span class="required">*</span></label>
+                            <select id="np-gender" class="premium-select">
+                                <option value="">Select...</option>
+                                <option>Male</option>
+                                <option>Female</option>
+                                <option>Non-binary</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Medical History -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-notes-medical"></i> Medical History</h4>
+                    <div class="form-group">
+                        <label for="np-history">Active Conditions (one per line)</label>
+                        <textarea id="np-history" rows="3" placeholder="e.g. Hypertension&#10;Type 2 Diabetes&#10;Chronic Kidney Disease Stage 3"></textarea>
+                    </div>
+                </div>
+
+                <!-- Safety-critical fields (Feature 1) -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i> Safety-Critical Fields</h4>
+                    <div class="modal-grid-2">
+                        <div class="form-group">
+                            <label for="np-allergies">Allergies (comma-separated) <span class="required">*</span></label>
+                            <input type="text" id="np-allergies" placeholder="e.g. Penicillin, Sulfa, NKDA">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-weight">Weight (kg or lbs) <span class="required">*</span></label>
+                            <input type="text" id="np-weight" placeholder="e.g. 72 kg">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-code-status">Code Status</label>
+                            <select id="np-code-status" class="premium-select">
+                                <option value="">Not documented</option>
+                                <option>Full Code</option>
+                                <option>DNR</option>
+                                <option>DNI</option>
+                                <option>DNR/DNI</option>
+                                <option>Comfort Care</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="np-pregnancy">Pregnancy Status</label>
+                            <select id="np-pregnancy" class="premium-select">
+                                <option value="">Not documented</option>
+                                <option>Not pregnant</option>
+                                <option>Pregnant</option>
+                                <option>Postpartum</option>
+                                <option>Not applicable</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="np-lmp">Last Menstrual Period</label>
+                            <input type="date" id="np-lmp">
+                        </div>
+                        <div class="form-group">
+                            <label for="np-directives">Advance Directives</label>
+                            <input type="text" id="np-directives" placeholder="e.g. Living will on file">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Medications -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-pills"></i> Current Medications</h4>
+                    <div id="np-meds-list" class="np-meds-list"></div>
+                    <button type="button" id="add-med-btn" class="add-row-btn">
+                        <i class="fa-solid fa-plus"></i> Add Medication
+                    </button>
+                </div>
+
+                <!-- Vitals -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-stethoscope"></i> Vitals</h4>
+                    <div class="modal-grid-3">
+                        <div class="form-group">
+                            <label>Temperature</label>
+                            <input type="text" id="vit-temp" placeholder="e.g. 98.6 F">
+                        </div>
+                        <div class="form-group">
+                            <label>Heart Rate</label>
+                            <input type="text" id="vit-hr" placeholder="e.g. 72 bpm">
+                        </div>
+                        <div class="form-group">
+                            <label>Respiratory Rate</label>
+                            <input type="text" id="vit-rr" placeholder="e.g. 16 breaths/min">
+                        </div>
+                        <div class="form-group">
+                            <label>Blood Pressure</label>
+                            <input type="text" id="vit-bp" placeholder="e.g. 120/80 mmHg">
+                        </div>
+                        <div class="form-group">
+                            <label>O2 Saturation</label>
+                            <input type="text" id="vit-o2" placeholder="e.g. 98% on room air">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Labs -->
+                <div class="modal-section">
+                    <h4 class="modal-section-title"><i class="fa-solid fa-vial"></i> Laboratory Results</h4>
+                    <div class="modal-grid-3">
+                        <div class="form-group"><label>Creatinine</label><input type="text" id="lab-creat" placeholder="e.g. 1.1 mg/dL"></div>
+                        <div class="form-group"><label>eGFR</label><input type="text" id="lab-egfr" placeholder="e.g. 75 mL/min"></div>
+                        <div class="form-group"><label>BNP</label><input type="text" id="lab-bnp" placeholder="e.g. 150 pg/mL"></div>
+                        <div class="form-group"><label>Sodium</label><input type="text" id="lab-na" placeholder="e.g. 138 mEq/L"></div>
+                        <div class="form-group"><label>Potassium</label><input type="text" id="lab-k" placeholder="e.g. 4.0 mEq/L"></div>
+                        <div class="form-group"><label>BUN</label><input type="text" id="lab-bun" placeholder="e.g. 18 mg/dL"></div>
+                        <div class="form-group"><label>Glucose</label><input type="text" id="lab-gluc" placeholder="e.g. 110 mg/dL"></div>
+                        <div class="form-group"><label>HbA1c</label><input type="text" id="lab-hba1c" placeholder="e.g. 7.2%"></div>
+                        <div class="form-group"><label>WBC</label><input type="text" id="lab-wbc" placeholder="e.g. 8.5 k/uL"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div id="np-error-msg" class="np-error hidden"></div>
+                <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                    <button id="modal-cancel-btn" class="secondary-btn">Cancel</button>
+                    <button id="modal-save-btn" class="primary-btn">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Patient
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

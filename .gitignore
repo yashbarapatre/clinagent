@@ -76,6 +76,10 @@ audit_logs/
 # Patient data (may contain PHI / PII)
 patients/
 
+# App dynamic runtime data
+fhir_output/
+uploads/
+
 # ── Misc ───────────────────────────────────────────────────────────────────────
 *.log
 *.tmp
