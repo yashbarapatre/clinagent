@@ -1,0 +1,33 @@
+{
+  "id": "102",
+  "name": "Eleanor Vance",
+  "age": 68,
+  "gender": "Female",
+  "date_of_birth": "1958-09-25",
+  "history": [
+    "Type 2 Diabetes Mellitus",
+    "Hypothyroidism",
+    "Gastroesophageal Reflux Disease (GERD)"
+  ],
+  "current_medications": [
+    { "name": "Metformin", "dosage": "1000 mg", "frequency": "twice daily" },
+    { "name": "Levothyroxine", "dosage": "75 mcg", "frequency": "daily" },
+    { "name": "Omeprazole", "dosage": "20 mg", "frequency": "daily" }
+  ],
+  "vitals": {
+    "temperature": "101.8 F (High)",
+    "heart_rate": "104 bpm (High)",
+    "respiratory_rate": "28 breaths/min (High)",
+    "blood_pressure": "110/68 mmHg",
+    "oxygen_saturation": "89% on room air"
+  },
+  "labs": {
+    "WBC": "14.5 x10^3/uL (High)",
+    "Sodium": "139 mEq/L (Normal)",
+    "Potassium": "3.8 mEq/L (Normal)",
+    "BUN": "22 mg/dL (High)",
+    "Creatinine": "1.0 mg/dL (Normal)",
+    "eGFR": "75 mL/min",
+    "HbA1c": "7.2% (Elevated)"
+  }
+}

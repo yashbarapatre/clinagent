@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClinAgent — Multi-Agent Clinical Documentation Copilot</title>
+    <meta name="description" content="ClinAgent is an AI-native, multi-agent clinical documentation copilot powered by Gemini 3.5 Flash and Antigravity SDK. Built for clinicians to save time and reduce medical errors.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-mode">
+    <div class="glass-bg"></div>
+
+    <header class="main-header">
+        <div class="logo-area">
+            <div class="logo-glow"></div>
+            <i class="fa-solid fa-heart-pulse logo-icon"></i>
+            <span class="logo-text">Clin<span>Agent</span></span>
+        </div>
+        <div class="header-controls">
+            <div class="system-status">
+                <span class="pulse-dot green"></span>
+                <span class="status-lbl">Antigravity Runtime: Connected</span>
+            </div>
+            <div class="clinician-profile">
+                <i class="fa-solid fa-user-doctor"></i>
+                <span>Dr. Trailblazer</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- LEFT COLUMN: Patient Intake & Chart -->
+        <section class="intake-section">
+            <div class="card glass-card scrollable">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-hospital-user"></i> Patient Chart Intake</h2>
+                </div>
+                
+                <div class="patient-selector-wrapper">
+                    <label for="patient-select">Select Patient EHR</label>
+                    <select id="patient-select" class="premium-select">
+                        <option value="" disabled selected>Select a patient...</option>
+                        <!-- Dynamic options loaded via API -->
+                    </select>
+                </div>
+
+                <!-- EHR Info Card (Populates Dynamically) -->
+                <div id="patient-ehr-card" class="ehr-details-card hidden">
+                    <div class="patient-bio">
+                        <h3 id="ehr-name">Jane Doe</h3>
+                        <div class="bio-grid">
+                            <span><strong>Age:</strong> <span id="ehr-age">68</span></span>
+                            <span><strong>Gender:</strong> <span id="ehr-gender">Female</span></span>
+                            <span><strong>DOB:</strong> <span id="ehr-dob">1958-09-25</span></span>
+                        </div>
+                    </div>
+                    <div class="ehr-section">
+                        <h4><i class="fa-solid fa-notes-medical"></i> Medical History</h4>
+                        <ul id="ehr-history" class="ehr-list"></ul>
+                    </div>
+                    <div class="ehr-section">
+                        <h4><i class="fa-solid fa-pills"></i> Current Medications</h4>
+                        <ul id="ehr-meds" class="ehr-list"></ul>
+                    </div>
+                    <div class="ehr-section vitals-section">
+                        <h4><i class="fa-solid fa-stethoscope"></i> Vitals</h4>
+                        <div id="ehr-vitals" class="vitals-grid"></div>
+                    </div>
+                    <div class="ehr-section labs-section">
+                        <h4><i class="fa-solid fa-vial"></i> Laboratory Findings</h4>
+                        <div id="ehr-labs" class="labs-grid"></div>
+                    </div>
+                </div>
+
+                <!-- Audio/Dictation Input -->
+                <div class="intake-controls">
+                    <h3><i class="fa-solid fa-microphone"></i> Bedsides Clinician Dictation</h3>
+                    <div class="voice-notes-wrapper">
+                        <textarea id="dictation-input" placeholder="Type or simulate clinician bedside voice notes here... (e.g. Patient presents with increasing shortness of breath, bilateral lower extremity edema, metoprolol success target checks...)"></textarea>
+                        <div class="voice-actions">
+                            <button id="record-btn" class="secondary-btn"><i class="fa-solid fa-microphone-lines"></i> Simulate Audio Intake</button>
+                            <div id="audio-waveform" class="waveform hidden">
+                                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Medical Image Upload -->
+                <div class="intake-controls">
+                    <h3><i class="fa-solid fa-image"></i> Medical Images (ECG, X-Ray, Labs)</h3>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="image-upload" accept="image/*" class="file-input-hidden">
+                        <label for="image-upload" class="upload-area" id="upload-label">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>Drag and drop or click to upload clinical images</span>
+                        </label>
+                        <textarea id="image-notes" placeholder="Optionally, type image notes or OCR/ECG description here... (e.g. Chest X-Ray shows moderate bilateral pleural effusions, cardiomegaly...)"></textarea>
+                    </div>
+                </div>
+
+                <!-- Run Button -->
+                <button id="run-pipeline-btn" class="primary-btn glow-btn" disabled>
+                    <i class="fa-solid fa-bolt"></i> Run ClinAgent Orchestrator
+                </button>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: Real-Time Pipeline & Clinician Review -->
+        <section class="review-section">
+            <!-- State 1: Awaiting Intake -->
+            <div id="state-idle" class="card glass-card flex-center">
+                <i class="fa-solid fa-stethoscope idle-icon"></i>
+                <h3>Awaiting Patient Intake</h3>
+                <p>Select a patient and provide clinician dictation/images to trigger the multi-agent clinical documentation pipeline.</p>
+            </div>
+
+            <!-- State 2: Running Pipeline Visualizer -->
+            <div id="state-running" class="card glass-card hidden">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-spinner fa-spin"></i> Running ClinAgent Parallel Agents</h2>
+                </div>
+                <div class="pipeline-visualizer">
+                    <div class="progress-bar-container">
+                        <div id="pipeline-progress" class="progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="pipeline-steps-grid">
+                        <div class="agent-node" id="node-intake">
+                            <i class="fa-solid fa-clipboard-user"></i>
+                            <span>Intake Agent</span>
+                            <small class="node-status">Active</small>
+                        </div>
+                        <div class="agent-node" id="node-rag">
+                            <i class="fa-solid fa-magnifying-glass-location"></i>
+                            <span>RAG Agent</span>
+                            <small class="node-status">Pending</small>
+                        </div>
+                        <div class="agent-node" id="node-reasoning">
+                            <i class="fa-solid fa-brain"></i>
+                            <span>Reasoning Agent</span>
+                            <small class="node-status">Pending</small>
+                        </div>
+                        <div class="agent-node" id="node-documentation">
+                            <i class="fa-solid fa-file-invoice"></i>
+                            <span>Documentation</span>
+                            <small class="node-status">Pending</small>
+                        </div>
+                        <div class="agent-node" id="node-verification">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <span>Verification</span>
+                            <small class="node-status">Pending</small>
+                        </div>
+                    </div>
+                    <div class="terminal-logs">
+                        <h3>Agent Execution Console</h3>
+                        <div id="terminal-console-output" class="console-body">
+                            <!-- Populated in real-time -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- State 3: Clinician Review & Document Editor -->
+            <div id="state-review" class="card glass-card hidden scrollable">
+                <div class="card-header space-between">
+                    <h2><i class="fa-solid fa-user-check"></i> Clinician Review Portal</h2>
+                    <span class="badge pending">Clinician Authority Required</span>
+                </div>
+
+                <!-- Safety Verification Alert Card -->
+                <div id="verification-card" class="verification-alert-card">
+                    <div class="alert-header">
+                        <i id="safety-shield-icon" class="fa-solid fa-shield-check"></i>
+                        <h4 id="safety-title">Safety Audit Complete: No issues found</h4>
+                    </div>
+                    <div class="alert-content">
+                        <div class="report-section">
+                            <h5>Dosing & Drug Checks</h5>
+                            <ul id="safety-dosing-checks"></ul>
+                        </div>
+                        <div class="report-section">
+                            <h5>Guideline Consistency</h5>
+                            <p id="safety-guidelines-adherence"></p>
+                        </div>
+                        <div id="safety-warnings-wrapper" class="report-section hidden">
+                            <h5 class="text-danger">Identified Safety Risks</h5>
+                            <ul id="safety-flags" class="flags-list text-danger"></ul>
+                        </div>
+                        <div id="safety-recommendations-wrapper" class="report-section hidden">
+                            <h5>Recommendations</h5>
+                            <p id="safety-recommendations"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Editor Workspace -->
+                <div class="workspace-tabs">
+                    <button class="tab-btn active" data-tab="soap"><i class="fa-solid fa-file-prescription"></i> SOAP Note</button>
+                    <button class="tab-btn" data-tab="prior-auth"><i class="fa-solid fa-signature"></i> Prior Auth Request</button>
+                    <button class="tab-btn" data-tab="discharge"><i class="fa-solid fa-house-medical-circle-exclamation"></i> Discharge Summary</button>
+                </div>
+
+                <div class="tab-content active" id="tab-soap">
+                    <div class="form-group">
+                        <label for="soap-subjective">Subjective (S)</label>
+                        <textarea id="soap-subjective" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="soap-objective">Objective (O)</label>
+                        <textarea id="soap-objective" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="soap-assessment">Assessment (A)</label>
+                        <textarea id="soap-assessment" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="soap-plan">Plan (P)</label>
+                        <textarea id="soap-plan" rows="4"></textarea>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-prior-auth">
+                    <div class="form-group">
+                        <label for="pa-medication">Target Medication Name</label>
+                        <input type="text" id="pa-medication">
+                    </div>
+                    <div class="form-group">
+                        <label for="pa-icd10">ICD-10 Code</label>
+                        <input type="text" id="pa-icd10">
+                    </div>
+                    <div class="form-group">
+                        <label for="pa-justification">Medical Necessity Justification</label>
+                        <textarea id="pa-justification" rows="8"></textarea>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-discharge">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dc-admit">Admitting Diagnosis</label>
+                            <input type="text" id="dc-admit">
+                        </div>
+                        <div class="form-group">
+                            <label for="dc-discharge">Discharge Diagnosis</label>
+                            <input type="text" id="dc-discharge">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="dc-course">Summary of Hospital Course</label>
+                        <textarea id="dc-course" rows="6"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="dc-meds">Discharge Medications (Comma-separated)</label>
+                        <textarea id="dc-meds" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="dc-followup">Follow-Up & Warning Instructions</label>
+                        <textarea id="dc-followup" rows="4"></textarea>
+                    </div>
+                </div>
+
+                <!-- Final Action Box -->
+                <div class="review-actions-footer">
+                    <div class="form-group">
+                        <label for="clinician-notes">Clinician Review Comments / Override Notes</label>
+                        <input type="text" id="clinician-notes" placeholder="Provide notes on corrections made or special instructions...">
+                    </div>
+                    <div class="button-row">
+                        <button id="reject-btn" class="danger-btn"><i class="fa-solid fa-xmark"></i> Reject & Discard</button>
+                        <button id="approve-btn" class="success-btn"><i class="fa-solid fa-check-double"></i> Approve & Push to EHR (FHIR)</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- AUDIT TRAIL LOG PANEL -->
+    <section class="audit-panel-section">
+        <div class="card glass-card">
+            <div class="card-header">
+                <h2><i class="fa-solid fa-list-check"></i> Chronological HIPAA Audit Logs</h2>
+            </div>
+            <div class="audit-grid-layout">
+                <div class="sessions-list-panel">
+                    <h3>Logged Clinical Runs</h3>
+                    <ul id="sessions-list" class="audit-list">
+                        <!-- Dynamic list -->
+                    </ul>
+                </div>
+                <div class="trail-viewer-panel">
+                    <h3>Run Audit Details</h3>
+                    <div id="trail-details-fallback" class="trail-fallback">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <p>Select a clinical run to view its HIPAA-compliant audit trail details.</p>
+                    </div>
+                    <div id="trail-details-wrapper" class="trail-details hidden">
+                        <div class="trail-meta">
+                            <span><strong>Session ID:</strong> <span id="trail-session-id"></span></span>
+                            <span><strong>Status:</strong> <span id="trail-status" class="badge"></span></span>
+                        </div>
+                        <div class="trail-timeline" id="trail-timeline">
+                            <!-- Dynamic timeline events -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JS Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>
