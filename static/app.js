@@ -208,17 +208,56 @@ function setupEventListeners() {
 // ─────────────────────────────────────────────────────────────────
 // Real Speech Recognition (Web Speech API)
 // ─────────────────────────────────────────────────────────────────
-function setupSpeechRecognition() {
+function showSpeechUnsupportedHint(message) {
+    // Show an inline, dismissable banner instead of a blocking alert
+    let banner = document.getElementById("speech-unsupported-banner");
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "speech-unsupported-banner";
+        banner.style.cssText = [
+            "background:rgba(239,68,68,0.12)",
+            "border:1px solid rgba(239,68,68,0.4)",
+            "color:#fca5a5",
+            "border-radius:8px",
+            "padding:10px 14px",
+            "margin-top:8px",
+            "font-size:13px",
+            "line-height:1.5",
+            "position:relative"
+        ].join(";");
+        const close = document.createElement("span");
+        close.textContent = "✕";
+        close.style.cssText = "position:absolute;top:8px;right:12px;cursor:pointer;opacity:0.7";
+        close.onclick = () => banner.remove();
+        banner.appendChild(close);
+        // Insert below the record button
+        recordBtn.parentNode.insertBefore(banner, recordBtn.nextSibling);
+    }
+    banner.firstChild.textContent = "";
+    const close = banner.querySelector("span");
+    banner.textContent = message;
+    banner.appendChild(close);
+}
+
+function initSpeechRecognition() {
+    // Called lazily on first click so the browser can prompt for mic permission
+    if (recognition) return true;
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
-        recordBtn.title = "Speech recognition not supported in this browser. Use Chrome or Edge.";
-        return;
+        // Check if the problem might be 127.0.0.1 vs localhost
+        const hint = location.hostname === "127.0.0.1"
+            ? `Speech recognition requires a secure context. Try opening the app at <a href="http://localhost:${location.port}" style="color:#818cf8">http://localhost:${location.port}</a> instead of 127.0.0.1.`
+            : "Speech recognition is not available. Please use Chrome or Edge with microphone permissions enabled.";
+        showSpeechUnsupportedHint(hint);
+        return false;
     }
 
     recognition = new SpeechRecognition();
-    recognition.continuous   = true;
+    recognition.continuous    = true;
     recognition.interimResults = true;
-    recognition.lang         = "en-US";
+    recognition.lang          = "en-US";
 
     let finalTranscript = "";
 
@@ -249,7 +288,11 @@ function setupSpeechRecognition() {
     recognition.onerror = e => {
         console.error("Speech recognition error:", e.error);
         if (e.error === "not-allowed") {
-            alert("Microphone access denied. Please allow microphone permissions and try again.");
+            showSpeechUnsupportedHint(
+                "Microphone access was denied. Click the 🔒 icon in your browser's address bar and allow microphone access, then try again."
+            );
+        } else if (e.error === "network") {
+            showSpeechUnsupportedHint("Speech recognition requires an internet connection for the first use.");
         }
         stopRecording();
     };
@@ -260,13 +303,16 @@ function setupSpeechRecognition() {
             try { recognition.start(); } catch(e) { stopRecording(); }
         }
     };
+
+    return true;
 }
 
+// Keep setupSpeechRecognition as a no-op — init is now lazy (on first click)
+function setupSpeechRecognition() { /* lazy init via initSpeechRecognition() */ }
+
 function toggleRecording() {
-    if (!recognition) {
-        alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.\n\nYou can type dictation notes manually in the text area.");
-        return;
-    }
+    // Lazy-init: attempt to create the recognition object on first user gesture
+    if (!recognition && !initSpeechRecognition()) return;
     if (isRecording) {
         stopRecording();
     } else {
