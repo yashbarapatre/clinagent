@@ -113,14 +113,14 @@
                     </div>
                 </div>
 
-                <!-- Medical Image Upload -->
+                <!-- Medical Image / Document Upload -->
                 <div class="intake-controls">
-                    <h3><i class="fa-solid fa-image"></i> Medical Images (ECG, X-Ray, Labs)</h3>
+                    <h3><i class="fa-solid fa-image"></i> Medical Images &amp; Documents (ECG, X-Ray, Lab PDF)</h3>
                     <div class="file-upload-wrapper">
-                        <input type="file" id="image-upload" accept="image/*" class="file-input-hidden">
+                        <input type="file" id="image-upload" accept="image/png,image/jpeg,image/webp,image/bmp,application/pdf,text/plain,text/csv" class="file-input-hidden">
                         <label for="image-upload" class="upload-area" id="upload-label">
                             <i class="fa-solid fa-cloud-arrow-up"></i>
-                            <span>Drag and drop or click to upload clinical images</span>
+                            <span>Drag and drop or click to upload a clinical image or document (PNG/JPG/PDF)</span>
                         </label>
                         <textarea id="image-notes" placeholder="Optionally, type image notes or OCR/ECG description here... (e.g. Chest X-Ray shows moderate bilateral pleural effusions, cardiomegaly...)"></textarea>
                     </div>

@@ -33,23 +33,49 @@ class DocumentationAgent:
                 "You are an expert Clinical Documentation Agent. "
                 "You will receive a consolidated clinical context containing: "
                 "1. Patient EHR Data (demographics, medications, labs, vitals) "
-                "2. Doctor Bedside Dictation notes "
-                "3. Medical Images description/analysis "
-                "4. Guideline-Directed Medical Therapy (GDMT) guidelines retrieved via RAG. "
+                "2. Clinician Dictation Transcript (speech-to-text of the clinician's bedside notes) "
+                "3. Multi-Modal Perception Findings (objective findings from any medical image, and data "
+                "extracted from any uploaded document) "
+                "4. Wearable / Fitbit Trend Analysis (longitudinal vitals trends and any signs of deterioration) "
+                "5. Guideline-Directed Medical Therapy (GDMT) guidelines retrieved via RAG. "
                 "Your job is to generate three clean, professional clinical outputs: "
                 "a SOAP Note, a Prior Authorization Request, and a Discharge Summary. "
+                "Incorporate the dictation-derived subjective history, the image/document objective findings, and the "
+                "wearable trends into the appropriate sections (e.g. wearable deterioration belongs in Objective/Assessment). "
                 "Ensure all data points (vitals, dates, lab values, specific drug dosages) match the input perfectly. "
                 "Format the output strictly according to the provided schema."
             ),
             response_schema=DocumentationOutput
         )
 
-    async def generate_documentation(self, ehr_data: str, dictation: str, image_notes: str, guidelines: str) -> dict:
-        """Generates structured SOAP note, prior auth request, and discharge summary."""
+    async def generate_documentation(self, ehr_data: str, guidelines: str,
+                                     media_findings: dict = None, wearable_analysis: dict = None,
+                                     dictation: str = "") -> dict:
+        """Generates structured SOAP note, prior auth request, and discharge
+        summary from the consolidated multi-modal perception findings."""
+        media_findings = media_findings or {}
+        wearable_analysis = wearable_analysis or {}
+
+        transcript = dictation or "(none)"
+        image_findings = media_findings.get("image_findings") or "(none)"
+        document_findings = media_findings.get("document_findings") or "(none)"
+        media_summary = media_findings.get("consolidated_summary") or "(none)"
+
+        wearable_summary = wearable_analysis.get("summary") or "(none)"
+        wearable_trends = wearable_analysis.get("concerning_trends") or []
+        wearable_focus = wearable_analysis.get("suggested_focus") or "(none)"
+
         prompt = (
             f"=== PATIENT EHR DATA ===\n{ehr_data}\n\n"
-            f"=== CLINICIAN DICTATION ===\n{dictation}\n\n"
-            f"=== MEDICAL IMAGE ANALYSIS ===\n{image_notes}\n\n"
+            f"=== CLINICIAN DICTATION TRANSCRIPT (speech-to-text) ===\n{transcript}\n\n"
+            f"=== MULTI-MODAL PERCEPTION FINDINGS ===\n"
+            f"Image findings: {image_findings}\n"
+            f"Document findings: {document_findings}\n"
+            f"Integrated media summary: {media_summary}\n\n"
+            f"=== WEARABLE / FITBIT TREND ANALYSIS ===\n"
+            f"Summary: {wearable_summary}\n"
+            f"Concerning trends: {', '.join(wearable_trends) if wearable_trends else '(none)'}\n"
+            f"Suggested clinical focus: {wearable_focus}\n\n"
             f"=== RAG RETRIEVED GUIDELINES ===\n{guidelines}\n\n"
             "Please generate the SOAP Note, Prior Authorization Request, and Discharge Summary."
         )

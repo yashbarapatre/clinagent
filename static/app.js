@@ -144,8 +144,11 @@ function setupEventListeners() {
     imageUpload.addEventListener("change", e => {
         const file = e.target.files[0];
         if (file) {
-            uploadLabel.innerHTML = `<i class="fa-solid fa-file-image" style="color:#a855f7;"></i> <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} KB)`;
-            imageNotesInput.value = `Image analysis requested for: ${file.name}.\nSuggested findings: Consolidation in left lung base / Cardiomegaly with mild pulmonary venous congestion.`;
+            // The file's bytes are sent to Gemini for real analysis, so we no
+            // longer fabricate findings here — just acknowledge the upload.
+            const isPdf = file.type === "application/pdf";
+            const icon = isPdf ? "fa-file-pdf" : (file.type.startsWith("image/") ? "fa-file-image" : "fa-file-lines");
+            uploadLabel.innerHTML = `<i class="fa-solid ${icon}" style="color:#a855f7;"></i> <strong>${file.name}</strong> (${(file.size/1024).toFixed(1)} KB)`;
         }
     });
 
@@ -460,7 +463,7 @@ async function runMissingDataCheck(patient) {
                 <i class="fa-solid fa-circle-xmark alert-icon"></i>
                 <div class="alert-body">
                     <strong>🔴 CRITICAL: ${f.label} is missing.</strong>
-                    <p>Pipeline blocked until this is resolved. Please update the patient record before proceeding.<br>
+                    <p>Proceeding is allowed, but the clinician must verify this before relying on the outputs.<br>
                     <em style="font-size:0.75rem;opacity:0.75;">${f.description}</em></p>
                 </div>
             </div>`;
@@ -472,22 +475,22 @@ async function runMissingDataCheck(patient) {
                 <i class="fa-solid fa-triangle-exclamation alert-icon"></i>
                 <div class="alert-body">
                     <strong>🟡 WARNING: ${f.label} not documented.</strong>
-                    <p>Clinical decisions may be incomplete. Clinician must acknowledge before proceeding.<br>
+                    <p>Clinical decisions may be incomplete. Please review before relying on the outputs.<br>
                     <em style="font-size:0.75rem;opacity:0.75;">${f.description}</em></p>
                 </div>
             </div>`;
     });
 
-    if (result === "blocked") {
-        runPipelineBtn.disabled = true;
-        runPipelineBtn.innerHTML = `<i class="fa-solid fa-ban"></i> Pipeline Blocked — Resolve Critical Fields First`;
-        acknowledgeBtn.classList.add("hidden");
-    } else if (result === "warnings") {
-        acknowledgeBtn.classList.remove("hidden");
-        runPipelineBtn.disabled = true;
+    // Non-blocking safety policy: criticalities and warnings are displayed for
+    // the clinician's awareness, but the pipeline is never hard-blocked.
+    runPipelineBtn.disabled = false;
+    if (critical.length > 0) {
+        runPipelineBtn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Run ClinAgent Orchestrator (Proceed with Caution)`;
     } else {
-        runPipelineBtn.disabled = false;
+        runPipelineBtn.innerHTML = `<i class="fa-solid fa-bolt"></i> Run ClinAgent Orchestrator`;
     }
+    // Acknowledgement is no longer a gate to running; hide the separate button.
+    acknowledgeBtn.classList.add("hidden");
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1036,7 +1039,7 @@ function resetScreens() {
     dictationInput.value = "";
     imageNotesInput.value = "";
     imageUpload.value = "";
-    uploadLabel.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i><span>Drag and drop or click to upload clinical images</span>`;
+    uploadLabel.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i><span>Drag and drop or click to upload a clinical image or document (PNG/JPG/PDF)</span>`;
     stopRecording();
 }
 

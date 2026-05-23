@@ -7,6 +7,8 @@ from .doc_agent import DocumentationAgent
 from .verification_agent import VerificationAgent
 from .audit_agent import AuditAgent
 from .safety_agent import SafetyAgent
+from .media_agent import MediaAnalysisAgent
+from .fitbit_agent import FitbitAnalysisAgent
 
 # Global in-memory state dictionary for tracking active sessions
 sessions_state = {}
@@ -19,8 +21,12 @@ class ClinAgentOrchestrator:
         self.verify_agent = VerificationAgent(api_key)
         self.audit_agent = AuditAgent()
         self.safety_agent = SafetyAgent(api_key)
+        self.media_agent = MediaAnalysisAgent(api_key)
+        self.fitbit_agent = FitbitAnalysisAgent(api_key)
 
-    async def run_workflow(self, session_id: str, patient_data: dict, dictation: str, image_notes: str, missing_data_check: dict = None):
+    async def run_workflow(self, session_id: str, patient_data: dict, dictation: str, image_notes: str,
+                           missing_data_check: dict = None, image_path: str = None,
+                           document_path: str = None):
         """Runs the entire multi-agent clinical documentation pipeline."""
         sessions_state[session_id] = {
             "status": "Starting",
@@ -32,6 +38,8 @@ class ClinAgentOrchestrator:
             "verification": None,
             "safety": missing_data_check or {},
             "allergy_check": None,
+            "media_findings": None,
+            "wearable_analysis": None,
         }
 
         def update_status(status: str, progress: int, step_desc: str):
@@ -56,7 +64,10 @@ class ClinAgentOrchestrator:
                 "vitals": patient_data.get("vitals"),
                 "labs": patient_data.get("labs"),
                 "dictation": dictation,
-                "image_notes": image_notes
+                "image_notes": image_notes,
+                "has_image": bool(image_path),
+                "has_document": bool(document_path),
+                "has_fitbit": bool((patient_data.get("fitbit") or {}).get("metrics")),
             })
 
             # Log the pre-run missing data check result (already computed before background task)
@@ -68,28 +79,58 @@ class ClinAgentOrchestrator:
                     "warning_fields_missing": [f["label"] for f in missing_data_check.get("warnings", [])],
                 })
 
-            # 2. Parallel RAG Retrieval & Reasoning
-            update_status("Retrieving Guidelines", 30, "Querying CDC, NIH, and WHO clinical databases in parallel...")
-            
-            guidelines_task = self.rag_agent.get_guidelines_for_patient(patient_data.get("history", []))
-            guidelines_text = await guidelines_task
-            
-            update_status("Analyzing Guidelines", 50, "Synthesizing retrieved clinical evidence against patient status.")
-            self.audit_agent.log_event(session_id, "rag_completed", {
-                "retrieved_guidelines": guidelines_text
-            })
+            # 2. Parallel Multi-Modal Perception
+            # RAG guideline retrieval, multi-modal media analysis (audio + image +
+            # document via Gemini), and wearable/Fitbit trend analysis have no
+            # inter-dependencies, so they run concurrently with asyncio.gather.
+            update_status("Multi-Modal Perception", 30,
+                          "Running RAG retrieval, Gemini multi-modal media analysis (image/document), and wearable trend analysis in parallel...")
 
-            # 3. Documentation Generation
+            guidelines_task = self.rag_agent.get_guidelines_for_patient(patient_data.get("history", []))
+            media_task = self.media_agent.analyze(
+                image_path=image_path,
+                document_path=document_path,
+                dictation_text=dictation,
+                image_notes=image_notes,
+            )
+            fitbit_task = self.fitbit_agent.analyze(patient_data.get("fitbit"))
+
+            guidelines_text, media_findings, wearable_analysis = await asyncio.gather(
+                guidelines_task, media_task, fitbit_task
+            )
+
+            update_status("Analyzing Findings", 55, "Synthesizing guidelines, multi-modal media findings, and wearable trends against patient status.")
+            self.audit_agent.log_event(session_id, "rag_completed", {"retrieved_guidelines": guidelines_text})
+            self.audit_agent.log_event(session_id, "media_analysis_completed", {
+                "modalities_processed": media_findings.get("modalities_processed", []),
+                "image_findings": media_findings.get("image_findings", ""),
+                "document_findings": media_findings.get("document_findings", ""),
+            })
+            self.audit_agent.log_event(session_id, "wearable_analysis_completed", {
+                "deteriorating": wearable_analysis.get("deteriorating"),
+                "concerning_trends": wearable_analysis.get("concerning_trends", []),
+            })
+            sessions_state[session_id]["media_findings"] = media_findings
+            sessions_state[session_id]["wearable_analysis"] = wearable_analysis
+
+            # 3. Documentation Generation (depends on all perception outputs)
             update_status("Generating Documentation", 70, "Concurrently generating SOAP note, Prior Auth, and Discharge summary...")
-            ehr_str = f"Name: {patient_data['name']}, Age: {patient_data['age']}, Gender: {patient_data['gender']}\nHistory: {', '.join(patient_data['history'])}\nVitals: {patient_data['vitals']}\nLabs: {patient_data['labs']}"
-            
+            fitbit = patient_data.get("fitbit") or {}
+            wearable_line = ("\nWearable trends: " + wearable_analysis.get("summary", "")) if fitbit.get("metrics") else ""
+            ehr_str = (
+                f"Name: {patient_data['name']}, Age: {patient_data['age']}, Gender: {patient_data['gender']}\n"
+                f"History: {', '.join(patient_data['history'])}\n"
+                f"Vitals: {patient_data['vitals']}\nLabs: {patient_data['labs']}{wearable_line}"
+            )
+
             doc_data = await self.doc_agent.generate_documentation(
                 ehr_data=ehr_str,
+                guidelines=guidelines_text,
+                media_findings=media_findings,
+                wearable_analysis=wearable_analysis,
                 dictation=dictation,
-                image_notes=image_notes,
-                guidelines=guidelines_text
             )
-            
+
             self.audit_agent.log_event(session_id, "docs_generated", doc_data)
 
             # 4. Verification Check

@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import datetime
+import mimetypes
 from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -142,9 +143,12 @@ def run_safety_check(patient_id: str):
 async def start_intake(
     background_tasks: BackgroundTasks,
     patient_id: str = Form(...),
-    dictation: str = Form(...),
-    image_notes: str = Form(...),
-    image: UploadFile = File(None)
+    # Optional with empty defaults: a clinician may run with only an image (no
+    # dictation) or no image notes. This Starlette version treats an empty
+    # required Form field as "missing" and returns 422, so these must default.
+    dictation: str = Form(""),
+    image_notes: str = Form(""),
+    image: UploadFile = File(None),
 ):
     """Starts the intake pipeline by spinning up agents in the background."""
     # 1. Fetch patient EHR data
@@ -155,40 +159,47 @@ async def start_intake(
     with open(patient_path, "r", encoding="utf-8") as f:
         patient_data = json.load(f)
 
-    # 2. Run missing data safety check BEFORE spawning background task
+    # 2. Run missing data safety check BEFORE spawning background task.
+    # Warnings and criticalities are surfaced to the clinician (and audited) but
+    # are non-blocking: the pipeline proceeds with caution regardless.
     missing_data_check = safety_agent.check_missing_data(patient_data)
+    audit_agent.log_event("pre-intake", "missing_data_check", {
+        "patient_id": patient_id,
+        "checked_at": missing_data_check["checked_at"],
+        "result": missing_data_check["result"],
+        "critical_fields_missing": [f["label"] for f in missing_data_check["critical"]],
+        "warning_fields_missing": [f["label"] for f in missing_data_check["warnings"]],
+        "enforced": False,
+    })
 
-    # If CRITICAL fields are missing, block the pipeline immediately
-    if missing_data_check["result"] == "blocked":
-        audit_agent.log_event("pre-intake", "missing_data_check", {
-            "patient_id": patient_id,
-            "checked_at": missing_data_check["checked_at"],
-            "result": "blocked",
-            "critical_fields_missing": [f["label"] for f in missing_data_check["critical"]],
-        })
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "Blocked",
-                "reason": "critical_missing_data",
-                "missing_data": missing_data_check,
-            }
-        )
+    # 3. Persist uploaded media so the agents can read the raw bytes.
+    async def _save_upload(upload):
+        if not upload or not upload.filename:
+            return None
+        file_ext = os.path.splitext(upload.filename)[1]
+        path = os.path.join(uploads_dir, f"{uuid.uuid4()}{file_ext}")
+        with open(path, "wb") as f:
+            f.write(await upload.read())
+        return path
 
-    # 3. Handle image upload if present
-    uploaded_image_path = None
-    if image:
-        file_ext = os.path.splitext(image.filename)[1]
-        unique_filename = f"{uuid.uuid4()}{file_ext}"
-        uploaded_image_path = os.path.join(uploads_dir, unique_filename)
-        with open(uploaded_image_path, "wb") as f:
-            f.write(await image.read())
-        # Append image path to log details
-        image_notes += f"\n[Uploaded Image Source: {image.filename}]"
+    # A clinician upload may be an image (X-ray/ECG/photo) or a document (PDF/lab).
+    # Route it by MIME so the media agent sends the correct Gemini primitive.
+    uploaded_path = await _save_upload(image)
+    image_path = document_path = None
+    if uploaded_path:
+        mime, _ = mimetypes.guess_type(uploaded_path)
+        if mime and mime.startswith("image/"):
+            image_path = uploaded_path
+            image_notes += f"\n[Uploaded Image Source: {image.filename}]"
+        else:
+            document_path = uploaded_path
+            image_notes += f"\n[Uploaded Document Source: {image.filename}]"
 
-    # 4. Create unique session and trigger orchestrator
+    # 4. Create unique session and trigger orchestrator. The clinician's spoken
+    # dictation is already converted to text (`dictation`) by the browser's
+    # speech-to-text, so no audio file is sent to the agents.
     session_id = str(uuid.uuid4())
-    
+
     background_tasks.add_task(
         orchestrator.run_workflow,
         session_id=session_id,
@@ -196,6 +207,8 @@ async def start_intake(
         dictation=dictation,
         image_notes=image_notes,
         missing_data_check=missing_data_check,
+        image_path=image_path,
+        document_path=document_path,
     )
 
     return {
