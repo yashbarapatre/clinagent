@@ -395,6 +395,131 @@ textarea:focus, input[type="text"]:focus {
     color: #ef4444;
 }
 
+/* Fitbit / Wearable Trends */
+.fitbit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.fitbit-header h4 {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.fitbit-range {
+    display: inline-flex;
+    gap: 0.2rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.15rem;
+}
+
+.fitbit-range button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.28rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.fitbit-range button:hover {
+    color: var(--text-primary);
+}
+
+.fitbit-range button.active {
+    background: rgba(99, 102, 241, 0.25);
+    color: #c7d2fe;
+}
+
+.fitbit-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.fitbit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.6rem;
+}
+
+.fitbit-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.6rem 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.fitbit-card.worsening {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+.fitbit-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.fitbit-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.fitbit-flag {
+    color: #ef4444;
+    font-size: 0.72rem;
+}
+
+.fitbit-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.fitbit-unit {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 0.2rem;
+}
+
+.fitbit-spark {
+    width: 100%;
+    height: 38px;
+    display: block;
+}
+
+.fitbit-delta {
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.fitbit-empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 /* Audio Simulation Waveform */
 .voice-actions {
     display: flex;

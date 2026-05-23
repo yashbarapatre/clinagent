@@ -196,6 +196,18 @@ function setupEventListeners() {
         if (confirm("Discard this session and all generated documents?")) resetScreens();
     });
 
+    // Fitbit range selector (1 week / 1 month / 3 months)
+    const fitbitRangeBar = document.getElementById("fitbit-range");
+    if (fitbitRangeBar) {
+        fitbitRangeBar.addEventListener("click", e => {
+            const btn = e.target.closest("button[data-days]");
+            if (!btn) return;
+            fitbitRangeDays = parseInt(btn.dataset.days, 10);
+            fitbitRangeBar.querySelectorAll("button").forEach(b => b.classList.toggle("active", b === btn));
+            drawFitbit();
+        });
+    }
+
     // Add Patient Modal
     addPatientBtn.addEventListener("click", openAddPatientModal);
     modalCloseBtn.addEventListener("click", closeAddPatientModal);
@@ -398,6 +410,8 @@ async function fetchPatientDetails(id) {
             const isHigh = v.toLowerCase().includes("high") || v.toLowerCase().includes("elevated");
             labsGrid.innerHTML += `<div class="lab-tag ${isHigh ? 'high' : ''}"><label>${k.toUpperCase()}</label><span>${v.replace(/\((High|Elevated|Mildly Elevated)\)/gi,"").trim()}</span></div>`;
         }
+
+        renderFitbit(activePatient.fitbit);
 
         patientEhrCard.classList.remove("hidden");
 
@@ -855,8 +869,107 @@ function displayPatient(patient) {
         const el = document.getElementById(id);
         if (el) el.innerHTML = "";
     });
+    renderFitbit(patient.fitbit);
 
     patientEhrCard.classList.remove("hidden");
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Fitbit / Wearable Trends
+// ─────────────────────────────────────────────────────────────────
+// The active patient's wearable payload and the doctor-selected window (in
+// days). Kept in module state so the range buttons can re-render on click
+// without re-fetching the patient.
+let currentFitbit = null;
+let fitbitRangeDays = 90;
+
+const FITBIT_RANGE_LABELS = { 7: "last week", 30: "last month", 90: "last 3 months" };
+
+// Stores the patient's wearable data and draws it for the current window.
+function renderFitbit(fitbit) {
+    currentFitbit = (fitbit && Array.isArray(fitbit.metrics) && fitbit.metrics.length) ? fitbit : null;
+    drawFitbit();
+}
+
+// Renders the metric cards for the currently-selected range. Trends moving in a
+// clinically concerning direction are flagged red so a clinician can spot a
+// gradual decline at a glance.
+function drawFitbit() {
+    const meta = document.getElementById("ehr-fitbit-meta");
+    const grid = document.getElementById("ehr-fitbit");
+    const rangeBar = document.getElementById("fitbit-range");
+    if (!meta || !grid) return;
+
+    if (!currentFitbit) {
+        meta.innerHTML = "";
+        grid.innerHTML = `<p class="fitbit-empty">No wearable data on file for this patient.</p>`;
+        if (rangeBar) rangeBar.style.visibility = "hidden";
+        return;
+    }
+    if (rangeBar) rangeBar.style.visibility = "visible";
+
+    const dates = currentFitbit.dates || [];
+    const days = Math.min(fitbitRangeDays, dates.length || fitbitRangeDays);
+    const windowDates = dates.slice(-days);
+    const rangeStart = windowDates[0];
+    const rangeEnd = windowDates[windowDates.length - 1] || currentFitbit.last_synced;
+
+    meta.innerHTML = `<i class="fa-solid fa-circle-info"></i> ${currentFitbit.device || "Wearable"} · ` +
+        `${FITBIT_RANGE_LABELS[fitbitRangeDays] || days + " days"}` +
+        (rangeStart ? ` (${rangeStart} → ${rangeEnd})` : "") +
+        ` · synced ${currentFitbit.last_synced || "—"}`;
+
+    grid.innerHTML = currentFitbit.metrics.map(m => buildFitbitCard(m, days)).join("");
+}
+
+function buildFitbitCard(m, days) {
+    const full = m.series || [];
+    if (full.length === 0) return "";
+    const series = full.slice(-days);
+
+    const first = series[0];
+    const last  = series[series.length - 1];
+    const delta = last - first;
+    const worsening = (m.direction === "up_bad" && delta > 0) ||
+                      (m.direction === "down_bad" && delta < 0);
+    const color = worsening ? "#ef4444" : "#10b981";
+    const arrow = delta > 0 ? "▲" : (delta < 0 ? "▼" : "▸");
+    const deltaTxt = `${delta > 0 ? "+" : ""}${Number(delta.toFixed(1))}`;
+    const window = FITBIT_RANGE_LABELS[fitbitRangeDays] || `${days} days`;
+
+    return `
+        <div class="fitbit-card ${worsening ? 'worsening' : ''}">
+            <div class="fitbit-card-head">
+                <span class="fitbit-label">${m.label}</span>
+                ${worsening ? '<i class="fa-solid fa-triangle-exclamation fitbit-flag" title="Concerning trend"></i>' : ''}
+            </div>
+            <div class="fitbit-value">${last}<span class="fitbit-unit">${m.unit || ""}</span></div>
+            ${buildSparkline(series, color)}
+            <div class="fitbit-delta" style="color:${color}">${arrow} ${deltaTxt}${m.unit ? " " + m.unit : ""} over ${window}</div>
+        </div>`;
+}
+
+// Builds an inline SVG sparkline scaled to the series' own min/max range.
+function buildSparkline(series, color) {
+    const w = 150, h = 38, pad = 4;
+    const min = Math.min(...series);
+    const max = Math.max(...series);
+    const range = (max - min) || 1;
+    const step = (w - pad * 2) / (series.length - 1);
+
+    const coords = series.map((v, i) => {
+        const x = pad + i * step;
+        const y = h - pad - ((v - min) / range) * (h - pad * 2);
+        return [x, y];
+    });
+    const points = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    const [lastX, lastY] = coords[coords.length - 1];
+
+    return `
+        <svg class="fitbit-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+            <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="2.8" fill="${color}"/>
+        </svg>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
